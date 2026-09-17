@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tomato Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{
+    --tomato:#ef4444;
+    --tomato-dim:#7f1d1d;
+    --leaf:#22c55e;
+    --bg1:#111318;
+    --bg2:#1a1d26;
+    --card:#191c24;
+    --ring-track:#2a2e3a;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(circle at 30% 20%,var(--bg2),var(--bg1) 70%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+  }
+  .widget{
+    width:100%;
+    max-width:300px;
+    background:linear-gradient(180deg,var(--card),#14161c);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:20px;
+    padding:18px 18px 16px;
+    box-shadow:0 10px 30px -10px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .mode-btn{
+    flex:1;
+    padding:6px 0;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:.03em;
+    border-radius:10px;
+    color:#8b8f9c;
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    transition:all .2s ease;
+  }
+  .mode-btn.active{
+    background:rgba(239,68,68,0.12);
+    color:var(--tomato);
+  }
+  .ring-wrap{ position:relative; width:190px; height:190px; margin:14px auto 10px; }
+  .ring-wrap svg{ transform:rotate(-90deg); width:100%; height:100%; }
+  .ring-track{ fill:none; stroke:var(--ring-track); stroke-width:9; }
+  .ring-progress{
+    fill:none;
+    stroke:var(--tomato);
+    stroke-width:9;
+    stroke-linecap:round;
+    transition:stroke-dashoffset .25s linear, stroke .3s ease;
+  }
+  .ring-center{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .time-text{
+    font-size:38px; font-weight:700; color:#f2f3f5; font-variant-numeric:tabular-nums;
+    letter-spacing:.5px;
+  }
+  .phase-text{ font-size:11px; color:#8b8f9c; text-transform:uppercase; letter-spacing:.12em; margin-top:2px; }
+  .ctrl-btn{
+    border:none; cursor:pointer; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .15s ease, filter .15s ease, background .2s ease;
+  }
+  .ctrl-btn:active{ transform:scale(0.92); }
+  .btn-main{
+    width:52px; height:52px;
+    background:linear-gradient(160deg,var(--tomato),#c62828);
+    color:#fff; box-shadow:0 6px 16px -4px rgba(239,68,68,0.5);
+  }
+  .btn-main:hover{ filter:brightness(1.08); }
+  .btn-sub{
+    width:38px; height:38px;
+    background:#22242e; color:#9aa0ac;
+  }
+  .btn-sub:hover{ background:#2a2d38; color:#e5e7eb; }
+  .dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--ring-track);
+    transition:background .25s ease, transform .25s ease;
+  }
+  .dot.filled{ background:var(--tomato); transform:scale(1.15); }
+  .gear{
+    width:28px; height:28px; border-radius:9px;
+    background:transparent; color:#5c6070; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:color .2s ease, background .2s ease, transform .3s ease;
+  }
+  .gear:hover{ color:#c9cdd6; background:#22242e; }
+  .gear.open{ transform:rotate(45deg); color:var(--tomato); }
+  .settings-panel{
+    max-height:0; overflow:hidden;
+    transition:max-height .3s ease, opacity .25s ease, margin-top .3s ease;
+    opacity:0;
+  }
+  .settings-panel.open{ max-height:160px; opacity:1; margin-top:10px; }
+  .set-input{
+    width:100%; background:#0f1116; border:1px solid #2a2e3a; color:#e5e7eb;
+    border-radius:8px; padding:5px 6px; font-size:12px; text-align:center;
+    outline:none;
+  }
+  .set-input:focus{ border-color:var(--tomato); }
+  .set-label{ font-size:10px; color:#6b7080; text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; display:block; }
+  .pulse{ animation:pulseGlow 1s ease-in-out 2; }
+  @keyframes pulseGlow{
+    0%,100%{ box-shadow:0 10px 30px -10px rgba(0,0,0,0.6); }
+    50%{ box-shadow:0 0 0 6px rgba(239,68,68,0.15), 0 10px 30px -10px rgba(0,0,0,0.6); }
+  }
+  .today-count{
+    text-align:center; font-size:11px; color:#6b7080; margin-top:-10px; margin-bottom:12px;
+    letter-spacing:.02em;
+  }
+  .today-count strong{ color:#e5e7eb; font-weight:600; }
+</style>
+</head>
+<body>
+
+<div class="widget" id="widget">
+  <!-- Header: mode tabs + settings gear -->
+  <div class="flex items-center gap-1">
+    <div class="flex flex-1 gap-1 bg-black/20 rounded-xl p-1">
+      <button class="mode-btn active" data-mode="focus">Focus</button>
+      <button class="mode-btn" data-mode="short">Short</button>
+      <button class="mode-btn" data-mode="long">Long</button>
+    </div>
+    <button class="gear" id="gearBtn" title="Settings" aria-label="Settings">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+  </div>
+
+  <!-- Ring timer -->
+  <div class="ring-wrap">
+    <svg viewBox="0 0 190 190">
+      <circle class="ring-track" cx="95" cy="95" r="82"></circle>
+      <circle class="ring-progress" id="ringProgress" cx="95" cy="95" r="82"></circle>
+    </svg>
+    <div class="ring-center">
+      <div class="time-text" id="timeText">25:00</div>
+      <div class="phase-text" id="phaseText">Focus time</div>
+    </div>
+  </div>
+
+  <!-- Session dots -->
+  <div class="flex items-center justify-center gap-2 mb-2" id="dots">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+  </div>
+  <div class="today-count" id="todayCount"><strong>0</strong> 🍅 completed today</div>
+
+  <!-- Controls -->
+  <div class="flex items-center justify-center gap-3">
+    <button class="ctrl-btn btn-sub" id="resetBtn" title="Reset">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <button class="ctrl-btn btn-main" id="playBtn" title="Start">
+      <svg id="playIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="pauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+    </button>
+    <button class="ctrl-btn btn-sub" id="skipBtn" title="Skip">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5v14l10-7z"/><rect x="17" y="5" width="2.5" height="14"/></svg>
+    </button>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
+      <div>
+        <span class="set-label">Focus</span>
+        <input type="number" min="1" max="90" id="setFocus" class="set-input" value="25">
+      </div>
+      <div>
+        <span class="set-label">Short</span>
+        <input type="number" min="1" max="60" id="setShort" class="set-input" value="5">
+      </div>
+      <div>
+        <span class="set-label">Long</span>
+        <input type="number" min="1" max="60" id="setLong" class="set-input" value="15">
+      </div>
+    </div>
+    <div class="flex items-center justify-between mt-3">
+      <label class="flex items-center gap-1.5 text-[11px] text-[#8b8f9c] cursor-pointer select-none">
+        <input type="checkbox" id="soundToggle" class="accent-red-500" checked>
+        Sound
+      </label>
+      <span class="text-[10px] text-[#4b4f5c]">🍅 Tomato Tracker</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const RADIUS = 82;
+  const CIRC = 2 * Math.PI * RADIUS;
+  const ring = document.getElementById('ringProgress');
+  ring.style.strokeDasharray = CIRC;
+  ring.style.strokeDashoffset = 0;
+
+  const els = {
+    time: document.getElementById('timeText'),
+    phase: document.getElementById('phaseText'),
+    play: document.getElementById('playBtn'),
+    playIcon: document.getElementById('playIcon'),
+    pauseIcon: document.getElementById('pauseIcon'),
+    reset: document.getElementById('resetBtn'),
+    skip: document.getElementById('skipBtn'),
+    gear: document.getElementById('gearBtn'),
+    panel: document.getElementById('settingsPanel'),
+    dots: document.querySelectorAll('#dots .dot'),
+    modeBtns: document.querySelectorAll('.mode-btn'),
+    setFocus: document.getElementById('setFocus'),
+    setShort: document.getElementById('setShort'),
+    setLong: document.getElementById('setLong'),
+    soundToggle: document.getElementById('soundToggle'),
+    widget: document.getElementById('widget'),
+    todayCount: document.getElementById('todayCount'),
+  };
+
+  const STORE_KEY = 'tomatoTrackerState';
+  const modeLabels = { focus: 'Focus time', short: 'Short break', long: 'Long break' };
+  const modeColors = { focus: '#ef4444', short: '#22c55e', long: '#3b82f6' };
+
+  function todayKey(){
+    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, resets counter daily
+  }
+
+  let durations = { focus: 25, short: 5, long: 15 }; // minutes
+  let mode = 'focus';
+  let secondsLeft = durations.focus * 60;
+  let totalSeconds = durations.focus * 60;
+  let running = false;
+  let timerId = null;
+  let completedFocusCount = 0;
+  let dailyCompleted = 0;
+  let lastDate = todayKey();
+  let soundOn = true;
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      if(s.durations) durations = s.durations;
+      if(typeof s.completedFocusCount === 'number') completedFocusCount = s.completedFocusCount;
+      if(typeof s.soundOn === 'boolean') soundOn = s.soundOn;
+      if(typeof s.lastDate === 'string') lastDate = s.lastDate;
+      if(typeof s.dailyCompleted === 'number') dailyCompleted = s.dailyCompleted;
+    }catch(e){ /* ignore corrupt state */ }
+
+    // Roll over to a fresh day if the stored date no longer matches today
+    const today = todayKey();
+    if(lastDate !== today){
+      lastDate = today;
+      dailyCompleted = 0;
+      saveState();
+    }
+  }
+
+  function saveState(){
+    localStorage.setItem(STORE_KEY, JSON.stringify({ durations, completedFocusCount, soundOn, lastDate, dailyCompleted }));
+  }
+
+  function fmt(s){
+    const m = Math.floor(s/60).toString().padStart(2,'0');
+    const sec = Math.floor(s%60).toString().padStart(2,'0');
+    return `${m}:${sec}`;
+  }
+
+  function updateRing(){
+    const pct = secondsLeft / totalSeconds;
+    ring.style.strokeDashoffset = CIRC * (1 - pct);
+    ring.style.stroke = modeColors[mode];
+  }
+
+  function render(){
+    els.time.textContent = fmt(secondsLeft);
+    els.phase.textContent = modeLabels[mode];
+    updateRing();
+    document.title = running ? `${fmt(secondsLeft)} · Tomato Tracker` : 'Tomato Tracker';
+    const filledDots = completedFocusCount > 0 && completedFocusCount % 4 === 0 ? 4 : completedFocusCount % 4;
+    els.dots.forEach((d, i) => d.classList.toggle('filled', i < filledDots));
+    els.todayCount.innerHTML = `<strong>${dailyCompleted}</strong> 🍅 completed today`;
+  }
+
+  function setMode(newMode, resetTime = true){
+    mode = newMode;
+    els.modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    if(resetTime){
+      totalSeconds = durations[mode] * 60;
+      secondsLeft = totalSeconds;
+    }
+    render();
+  }
+
+  function tick(){
+    secondsLeft--;
+    if(secondsLeft <= 0){
+      handlePhaseComplete();
+      return;
+    }
+    render();
+  }
+
+  function handlePhaseComplete(){
+    playChime();
+    els.widget.classList.add('pulse');
+    setTimeout(() => els.widget.classList.remove('pulse'), 2000);
+
+    if(mode === 'focus'){
+      completedFocusCount++;
+      dailyCompleted++;
+      saveState();
+      const nextMode = (completedFocusCount % 4 === 0) ? 'long' : 'short';
+      setMode(nextMode);
+    } else {
+      setMode('focus');
+    }
+    stop(false);
+  }
+
+  function start(){
+    if(running) return;
+    running = true;
+    els.playIcon.style.display = 'none';
+    els.pauseIcon.style.display = '';
+    timerId = setInterval(tick, 1000);
+  }
+
+  function stop(userInitiated = true){
+    running = false;
+    els.playIcon.style.display = '';
+    els.pauseIcon.style.display = 'none';
+    clearInterval(timerId);
+    render();
+  }
+
+  function reset(){
+    stop();
+    totalSeconds = durations[mode] * 60;
+    secondsLeft = totalSeconds;
+    render();
+  }
+
+  function skip(){
+    handlePhaseComplete();
+  }
+
+  // Web Audio beep, no external assets needed
+  function playChime(){
+    if(!soundOn) return;
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [880, 1174.66];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + i*0.18 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i*0.18 + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + i*0.18);
+        osc.stop(ctx.currentTime + i*0.18 + 0.32);
+      });
+    }catch(e){ /* audio unsupported */ }
+  }
+
+  // Events
+  els.play.addEventListener('click', () => running ? stop() : start());
+  els.reset.addEventListener('click', reset);
+  els.skip.addEventListener('click', skip);
+
+  els.modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      stop();
+      setMode(btn.dataset.mode);
+    });
+  });
+
+  els.gear.addEventListener('click', () => {
+    els.gear.classList.toggle('open');
+    els.panel.classList.toggle('open');
+  });
+
+  [['setFocus','focus'], ['setShort','short'], ['setLong','long']].forEach(([id, key]) => {
+    els[id].addEventListener('change', () => {
+      let v = parseInt(els[id].value, 10);
+      if(isNaN(v) || v < 1) v = 1;
+      durations[key] = v;
+      saveState();
+      if(mode === key && !running) reset();
+    });
+  });
+
+  els.soundToggle.addEventListener('change', () => {
+    soundOn = els.soundToggle.checked;
+    saveState();
+  });
+
+  // Init
+  loadState();
+  els.setFocus.value = durations.focus;
+  els.setShort.value = durations.short;
+  els.setLong.value = durations.long;
+  els.soundToggle.checked = soundOn;
+  setMode('focus');
+})();
+</script>
+
+</body>
+</html>
